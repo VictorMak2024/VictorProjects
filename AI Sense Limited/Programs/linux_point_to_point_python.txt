@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+import rospy
+import cv2
+import time
+import yaml
+from geometry_msgs.msg import PoseStamped
+from move_base_msgs.msg import MoveBaseActionResult
+from time import sleep
+
+
+path_name = "/home/jetson/Robot_Pose/pts.yaml"
+with open(path_name, 'r') as stream:
+    # Converts yaml document to python object
+    d=yaml.safe_load(stream)
+pts = d['footpts']
+idx = 0
+img_counter = 1
+cap = cv2.VideoCapture(200)
+pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size = 1)
+rospy.init_node('car_move_pose_pub_sub') # anonymous = True
+
+
+rospy.sleep(3)
+
+frame_id_1 = "map"
+pos1_x = 0.521341085434
+pos1_y = 0.349529415369
+ori1_z = 0.0264515139919
+ori1_w = 0.999650097488
+
+frame_id_2 = "map"
+pos2_x = 0.40897154808
+pos2_y = 0.0879865661263
+ori2_z = -0.71650347131
+ori2_w = 0.697583525896
+
+frame_id_3 = "map"
+pos3_x = 0.585530519485
+pos3_y = 0.257038891315
+ori3_z = 0.0574744653907
+ori3_w = 0.998346976671
+
+frame_id_4 = "map"
+pos4_x = 4.07619857788
+pos4_y = 0.868359088898
+ori4_z = 0.0102429843222
+ori4_w = 0.99994753926
+
+frame_id_5 = "map"
+pos5_x = 4.0107460022
+pos5_y = -0.0578107945621
+ori5_z = -0.705804316084
+ori5_w = 0.708406851602
+
+def car_move_pose_1():
+    pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size = 1)
+    rospy.init_node('car_move_pose') # anonymous = True
+    rate = rospy.Rate(100) # 1000hz
+    while not rospy.is_shutdown():
+        msg = PoseStamped()
+        msg.header.frame_id = "map"
+        msg.pose.position.x = 0.521341085434
+        msg.pose.position.y = 0.349529415369
+        msg.pose.position.z = 0.0
+        msg.pose.orientation.x = 0.0
+        msg.pose.orientation.y = 0.0
+        msg.pose.orientation.z = 0.0264515139919
+        msg.pose.orientation.w = 0.999650097488
+        pub.publish(msg)
+        rospy.loginfo("Moving a point finished !")
+        rate.sleep
+        
+def car_move_pose_2(frameId, x, y, z, w):
+    #rate = rospy.Rate(100) # 1000hz
+    #while not rospy.is_shutdown():
+    msg = PoseStamped()
+    #msg.header.seq = 1 (Python)
+    msg.header.frame_id = frameId
+    msg.pose.position.x = x
+    msg.pose.position.y = y
+    msg.pose.orientation.z = z
+    msg.pose.orientation.w = w
+    pub.publish(msg)
+    rospy.loginfo("Moving a point finished !")
+    #rate.sleep
+    
+def car_moving_listener():
+    #rospy.init_node('car_moving_listener')
+    rospy.Subscriber('/move_base/result', MoveBaseActionResult, callback)
+
+def callback(msg):
+    #print (msg.status.status)
+    global idx
+    if(msg.status.status == 3): 
+        if(idx<len(pts)):
+            rospy.loginfo("Reach a point")
+            car_move_pose_2("map",pts[idx][0], pts[idx][1], pts[idx][2],pts[idx][3] )
+            camera_capture()
+            idx+=1
+    else:
+        rospy.loginfo("Reach a point failed !")
+    
+def camera_capture():
+    global img_counter
+    if(cap.isOpened()):
+        ret, frame = cap.read()
+        cv2.waitKey(1)
+        currentDT = time.localtime(time.time())
+        a = time.strftime("%Y_%m_%d", currentDT)
+        b = time.strftime("%H:%M:%S", currentDT)
+        img_name = "/home/jetson/Pictures/fr_{}-".format(img_counter) + a + "-" + b +".png"
+        cv2.imwrite(img_name, frame)
+        rospy.loginfo("Camera captured : {}".format(img_counter))
+        img_counter += 1
+    else:
+        rospy.loginfo("Camera Opening is failed !")
+    
+def loading_pose_data_file():
+    with open(path_name, 'r') as file:
+        pose_data = yaml.safe_load(file)
+    print("Loading pose file is finished !")
+    
+        
+if __name__ == '__main__':
+    try:
+        #loading_pose_data_file()
+        car_move_pose_2("map",pts[idx][0], pts[idx][1], pts[idx][2],pts[idx][3])    
+        idx+=1
+        #camera_capture()
+        car_moving_listener()
+        rospy.spin()
+    except rospy.ROSInterruptException:
+        rospy.loginfo("Moving point failed !")
